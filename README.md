@@ -1,4 +1,4 @@
-# Steganography Hidden Payload Injector
+# Steganography Hidden Payload Injector By: Dogematti
 
 This project allows you to dynamically inject payloads, such as reverse shells, into various media files using steganography techniques or metadata manipulation. It supports multiple media formats and provides an easy-to-use command-line interface for injecting and extracting payloads from files.
 
